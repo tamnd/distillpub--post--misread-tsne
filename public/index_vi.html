@@ -1,0 +1,250 @@
+<!doctype html>
+<meta charset="utf-8">
+<link href="material-icons.css" rel="stylesheet">
+<script src="assets/template.v1.js"></script>
+<script type="text/front-matter">
+  title: Cách Dùng t-SNE Hiệu Quả
+  description: Dù cực kỳ hữu ích để trực quan hóa dữ liệu nhiều chiều, biểu đồ t-SNE đôi khi có thể khó hiểu hoặc gây hiểu lầm.
+  authors:
+    - Martin Wattenberg: http://hint.fm/
+    - "Fernanda Viégas": http://hint.fm/
+    - Ian Johnson: http://enjalot.github.io/
+  affiliations:
+    - Google Brain: http://g.co/brain
+    - Google Brain: http://g.co/brain
+    - Google Cloud: http://cloud.google.com
+</script>
+
+<script src="assets/d3.min.js"></script>
+<script src="assets/tsne.js"></script>
+<script src="assets/demo-configs.js"></script>
+<script src="assets/figure-configs.js"></script>
+<script src="assets/visualize.js"></script>
+<script src="assets/figures.js"></script>
+
+<style>
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  background: transparent;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+}
+input[type=range]:focus {
+  outline: none;
+}
+input[type=range]::-ms-track {
+  width: 100%;
+  cursor: pointer;
+  background: transparent;
+  border-color: transparent;
+  color: transparent;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: steelblue;
+  cursor: pointer;
+  margin-top: -6px;
+}
+input[type=range]::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: steelblue;
+  cursor: pointer;
+  border: none;
+}
+input[type=range]::-ms-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: grey;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 3px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  border: none;
+}
+input[type=range]:focus::-webkit-slider-runnable-track {
+  background: rgba(0, 0, 0, 0.15);
+}
+input[type=range]::-moz-range-track,
+input[type=range]::-ms-track {
+  width: 100%;
+  height: 3px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  border: none;
+}
+input[type=range]::-ms-fill-lower,
+input[type=range]::-ms-fill-upper,
+input[type=range]:focus::-ms-fill-lower,
+input[type=range]:focus::-ms-fill-upper {
+  background: rgba(0, 0, 0, 0.1);
+}
+</style>
+
+<dt-include src="assets/tray.html"></dt-include>
+
+<dt-article>
+  <h1 class="l-middle">Cách Dùng t-SNE Hiệu Quả</h1>
+  <h2 class="l-middle">Dù cực kỳ hữu ích để trực quan hóa dữ liệu nhiều chiều, biểu đồ t-SNE đôi khi có thể bí ẩn hoặc gây hiểu lầm. Bằng cách quan sát t-SNE trong các trường hợp đơn giản, ta có thể học cách dùng nó hiệu quả hơn.</h2>
+  <div class="l-page">
+    <dt-include src="assets/playground.html"></dt-include>
+  </div>
+  <dt-byline></dt-byline>
+
+  <p>Một phương pháp phổ biến để khám phá dữ liệu nhiều chiều là t-SNE, được van der Maaten và Hinton giới thiệu năm 2008. Kỹ thuật này đã trở nên rất phổ biến trong học máy vì nó có khả năng gần như kỳ diệu: tạo ra các "bản đồ" hai chiều hấp dẫn từ dữ liệu có hàng trăm, thậm chí hàng nghìn chiều. Dù ấn tượng, những hình ảnh này rất dễ bị diễn giải sai. Mục đích của ghi chú này là giúp tránh một số cách hiểu sai thường gặp.</p>
+
+  <p>Chúng ta sẽ đi qua một loạt ví dụ đơn giản để minh họa biểu đồ t-SNE có thể và không thể cho thấy điều gì. Kỹ thuật t-SNE thật sự hữu ích, nhưng chỉ khi bạn biết cách diễn giải nó.</p>
+
+  <p>Trước khi đi sâu hơn: nếu bạn chưa từng gặp t-SNE, đây là phần toán học cần biết. Mục tiêu là lấy một tập điểm trong không gian nhiều chiều và tìm một biểu diễn trung thực của các điểm đó trong không gian ít chiều hơn, thường là mặt phẳng 2D. Thuật toán là phi tuyến và thích nghi với dữ liệu nền, thực hiện các phép biến đổi khác nhau ở các vùng khác nhau. Chính các khác biệt này có thể là nguồn gây nhầm lẫn lớn.</p>
+
+  <p>Một đặc điểm thứ hai của t-SNE là tham số có thể điều chỉnh, "perplexity", nói một cách lỏng lẻo là cách cân bằng sự chú ý giữa khía cạnh cục bộ và toàn cục của dữ liệu. Theo một nghĩa nào đó, tham số này là phỏng đoán về số láng giềng gần của mỗi điểm. Giá trị perplexity có tác động phức tạp lên hình ảnh kết quả. Bài báo gốc viết: <em>"Hiệu năng của SNE khá bền vững trước các thay đổi của perplexity, và các giá trị điển hình nằm giữa 5 và 50."</em> Nhưng câu chuyện tinh tế hơn thế. Khai thác tốt t-SNE có thể đồng nghĩa với việc phân tích nhiều biểu đồ với các perplexity khác nhau.</p>
+
+  <p>Đó chưa phải toàn bộ các phức tạp. Chẳng hạn, thuật toán t-SNE không phải lúc nào cũng cho đầu ra tương tự nhau ở các lần chạy liên tiếp, và còn có các siêu tham số khác liên quan tới quá trình tối ưu hóa.</p>
+
+  <hr>
+
+  <h2>1. Các siêu tham số thật sự quan trọng</h2>
+
+  <p>Hãy bắt đầu với "hello world" của t-SNE: một tập dữ liệu gồm hai cụm cách xa nhau. Để đơn giản nhất có thể, ta xét các cụm trong mặt phẳng 2D, như hình bên trái. Để dễ nhìn, hai cụm được mã màu. Các biểu đồ bên phải cho thấy kết quả t-SNE với năm giá trị perplexity khác nhau.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-01" data-id="01"></div>
+
+  <p>Với perplexity trong khoảng 5-50 do van der Maaten và Hinton gợi ý, các biểu đồ đúng là cho thấy hai cụm này, dù hình dạng rất khác nhau. Ngoài khoảng đó, mọi thứ bắt đầu kỳ lạ. Với perplexity 2, biến thiên cục bộ chi phối. Ở perplexity 100, hai cụm bị nhập lại, minh họa một cạm bẫy: để thuật toán vận hành đúng, perplexity nên nhỏ hơn số điểm. Nếu không, các triển khai có thể cho hành vi bất ngờ.</p>
+
+  <p>Mỗi biểu đồ ở trên được tạo bằng 5.000 vòng lặp với learning rate, thường gọi là "epsilon", bằng 10, và đã đạt trạng thái ổn định ở bước 5.000. Các giá trị đó tạo khác biệt đến mức nào? Theo kinh nghiệm của chúng tôi, điều quan trọng nhất là lặp cho tới khi đạt một cấu hình ổn định.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-02" data-id="02"></div>
+
+  <p>Các hình trên cho thấy năm lần chạy khác nhau ở perplexity 30. Bốn lần đầu bị dừng trước khi ổn định. Sau 10, 20, 60 và 120 bước, bạn có thể thấy các bố cục trông như một chiều hoặc thậm chí giống một điểm của các cụm. Nếu bạn thấy biểu đồ t-SNE có hình dạng "bị thắt" kỳ lạ, rất có thể quá trình đã dừng quá sớm. Đáng tiếc là không có số bước cố định nào bảo đảm kết quả ổn định. Các tập dữ liệu khác nhau có thể cần số vòng lặp khác nhau để hội tụ.</p>
+
+  <p>Một câu hỏi tự nhiên khác là liệu các lần chạy khác nhau với cùng siêu tham số có cho cùng kết quả không. Trong ví dụ hai cụm đơn giản này, và trong hầu hết ví dụ khác mà chúng tôi bàn tới, nhiều lần chạy cho cùng hình dạng toàn cục. Tuy nhiên, một số tập dữ liệu cho các biểu đồ khác nhau rõ rệt qua từng lần chạy; chúng tôi sẽ đưa ra một ví dụ như vậy ở phần sau.</p>
+
+  <p>Từ đây trở đi, trừ khi nói khác, chúng tôi sẽ hiển thị kết quả từ 5.000 vòng lặp. Con số đó thường đủ để hội tụ trong các ví dụ tương đối nhỏ của bài này. Tuy vậy, chúng tôi vẫn sẽ hiển thị nhiều giá trị perplexity, vì tham số này dường như tạo khác biệt lớn trong mọi trường hợp.</p>
+
+  <hr>
+
+  <h2>2. Kích thước cụm trong biểu đồ t-SNE không có ý nghĩa</h2>
+
+  <p>Đến đây mọi thứ có vẻ ổn. Nhưng nếu hai cụm có độ lệch chuẩn khác nhau, tức kích thước khác nhau thì sao? Ở đây kích thước nghĩa là kích thước hộp bao, không phải số điểm. Dưới đây là các biểu đồ t-SNE cho một hỗn hợp Gaussian trong mặt phẳng, trong đó một cụm phân tán gấp 10 lần cụm kia.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-03" data-id="03"></div>
+
+  <p>Đáng ngạc nhiên là hai cụm trông gần như cùng kích thước trong các biểu đồ t-SNE. Chuyện gì đang xảy ra? Thuật toán t-SNE thích nghi khái niệm "khoảng cách" của nó với biến thiên mật độ theo vùng trong tập dữ liệu. Kết quả là nó tự nhiên giãn các cụm dày đặc và co các cụm thưa, làm cân bằng kích thước cụm. Cần nói rõ rằng đây là hiệu ứng khác với thực tế thông thường rằng mọi kỹ thuật giảm chiều đều bóp méo khoảng cách. Trong ví dụ này, toàn bộ dữ liệu ban đầu đã là hai chiều. Thay vào đó, cân bằng mật độ là điều xảy ra có chủ đích và là một đặc tính dự đoán được của t-SNE.</p>
+
+  <p>Điểm mấu chốt là bạn không thể nhìn thấy kích thước tương đối của các cụm trong biểu đồ t-SNE.</p>
+
+  <hr>
+
+  <h2>3. Khoảng cách giữa các cụm có thể không mang ý nghĩa</h2>
+
+  <p>Còn khoảng cách <em>giữa</em> các cụm thì sao? Các biểu đồ tiếp theo cho thấy ba Gaussian, mỗi cụm 50 điểm, trong đó một cặp cách nhau xa gấp 5 lần một cặp khác.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-04" data-id="04"></div>
+
+  <p>Ở perplexity 50, biểu đồ cho cảm giác khá tốt về hình học toàn cục. Với các perplexity thấp hơn, các cụm trông gần như cách đều. Khi perplexity là 100, ta thấy hình học toàn cục khá ổn, nhưng một cụm lại có vẻ nhỏ hơn hẳn các cụm khác một cách sai lệch. Vì perplexity 50 cho hình ảnh tốt trong ví dụ này, liệu ta có thể luôn đặt perplexity bằng 50 khi muốn thấy hình học toàn cục không?</p>
+
+  <p>Đáng buồn là không. Nếu thêm nhiều điểm vào mỗi cụm, perplexity phải tăng để bù lại. Đây là các biểu đồ t-SNE cho ba cụm Gaussian, mỗi cụm 200 điểm thay vì 50. Lúc này không giá trị perplexity thử nghiệm nào cho kết quả tốt.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-05" data-id="05"></div>
+
+  <p>Việc muốn thấy hình học toàn cục lại cần tinh chỉnh perplexity là một tin không vui. Dữ liệu thực tế có thể có nhiều cụm với số phần tử khác nhau. Có thể không tồn tại một giá trị perplexity duy nhất nắm bắt được khoảng cách giữa tất cả các cụm, và đáng tiếc perplexity lại là tham số toàn cục. Khắc phục vấn đề này có thể là một hướng nghiên cứu thú vị trong tương lai.</p>
+
+  <p>Thông điệp cơ bản là khoảng cách giữa các cụm tách biệt rõ trong biểu đồ t-SNE có thể chẳng mang ý nghĩa gì.</p>
+
+  <hr>
+
+  <h2>4. Nhiễu ngẫu nhiên không phải lúc nào cũng trông ngẫu nhiên</h2>
+
+  <p>Một cạm bẫy kinh điển là tưởng rằng mình thấy mẫu hình trong thứ thật ra chỉ là dữ liệu ngẫu nhiên. Nhận ra nhiễu khi nhìn thấy nó là một kỹ năng quan trọng, nhưng cần thời gian để xây dựng trực giác đúng. Điều khó ở t-SNE là nó ném nhiều trực giác sẵn có ra ngoài cửa sổ. Các biểu đồ tiếp theo cho thấy dữ liệu thật sự ngẫu nhiên: 500 điểm được lấy từ phân phối Gaussian đơn vị trong 100 chiều. Hình bên trái là phép chiếu lên hai tọa độ đầu tiên.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-06" data-id="06"></div>
+
+  <p>Biểu đồ với perplexity 2 dường như cho thấy các cụm rất rõ. Nếu bạn đang điều chỉnh perplexity để làm lộ cấu trúc trong dữ liệu, bạn có thể nghĩ mình đã trúng lớn.</p>
+
+  <p>Tất nhiên, vì ta biết đám mây điểm được sinh ngẫu nhiên, nó không có cụm nào đáng quan tâm về mặt thống kê: các "đám" đó không có ý nghĩa. Nếu nhìn lại các ví dụ trước, perplexity thấp thường dẫn tới kiểu phân bố này. Nhận ra những đám đó là nhiễu ngẫu nhiên là một phần quan trọng khi đọc biểu đồ t-SNE.</p>
+
+  <p>Tuy vậy còn một điều thú vị khác, có thể là điểm thắng của t-SNE. Lúc đầu, biểu đồ perplexity 30 trông chẳng giống phân phối Gaussian: chỉ có khác biệt mật độ nhẹ giữa các vùng của đám mây, và các điểm có vẻ được phân bố đều một cách đáng ngờ. Thực ra, các đặc điểm này nói lên điều hữu ích về phân phối chuẩn nhiều chiều, vốn rất gần với phân phối đều trên một mặt cầu: các điểm phân bố đều với khoảng cách giữa các điểm gần như bằng nhau. Nhìn theo cách này, biểu đồ t-SNE chính xác hơn bất kỳ phép chiếu tuyến tính nào.</p>
+
+  <hr>
+
+  <h2>5. Bạn có thể thấy một số hình dạng, trong một số trường hợp</h2>
+
+  <p>Dữ liệu hiếm khi phân bố hoàn toàn đối xứng. Hãy xem một phân phối Gaussian thẳng theo trục trong 50 chiều, trong đó độ lệch chuẩn ở tọa độ i là 1/i. Nói cách khác, ta đang nhìn một đám mây điểm dạng ellipsoid hơi dài.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-07" data-id="07"></div>
+
+  <p>Với perplexity đủ cao, các hình dạng kéo dài rất dễ đọc. Ngược lại, ở perplexity thấp, hiệu ứng cục bộ và các "đám" vô nghĩa chiếm trung tâm. Những hình dạng cực đoan hơn cũng hiện ra, nhưng một lần nữa chỉ ở perplexity phù hợp. Ví dụ, đây là hai cụm, mỗi cụm 75 điểm trong 2D, được sắp thành các đường song song với một ít nhiễu.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-08" data-id="08"></div>
+
+  <p>Trong một khoảng perplexity nhất định, các cụm dài trông khá gần với hình dạng đúng, điều này khá yên tâm.</p>
+
+  <p>Ngay cả trong các trường hợp tốt nhất vẫn có một méo mó tinh tế: các đường hơi cong ra ngoài trong biểu đồ t-SNE. Lý do là như thường lệ, t-SNE có xu hướng giãn các vùng dữ liệu dày hơn. Vì phần giữa của các cụm có ít khoảng trống xung quanh hơn hai đầu, thuật toán phóng đại chúng.</p>
+
+  <hr>
+
+  <h2>6. Với tô-pô, bạn có thể cần nhiều hơn một biểu đồ</h2>
+
+  <p>Đôi khi bạn có thể đọc thông tin tô-pô từ biểu đồ t-SNE, nhưng thường cần quan sát ở nhiều perplexity. Một tính chất tô-pô đơn giản nhất là sự bao chứa. Các biểu đồ dưới đây cho thấy hai nhóm, mỗi nhóm 75 điểm trong không gian 50 chiều. Cả hai được lấy mẫu từ các phân phối Gaussian đối xứng tâm tại gốc, nhưng một nhóm phân tán chặt hơn nhóm kia 50 lần. Phân phối "nhỏ" về cơ bản nằm bên trong phân phối lớn.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-09" data-id="09"></div>
+
+  <p>Góc nhìn perplexity 30 cho thấy tô-pô cơ bản một cách đúng đắn, nhưng t-SNE lại phóng đại mạnh kích thước của nhóm điểm nhỏ hơn. Ở perplexity 50, một hiện tượng mới xuất hiện: nhóm ngoài trở thành một vòng tròn, vì biểu đồ cố mô tả việc tất cả điểm của nhóm ngoài đều cách nhóm trong xấp xỉ như nhau. Nếu chỉ nhìn hình này, rất dễ hiểu nhầm các điểm ngoài là một cấu trúc một chiều.</p>
+
+  <p>Còn các dạng tô-pô phức tạp hơn thì sao? Chủ đề này có thể gần gũi với các nhà toán học hơn là các nhà phân tích dữ liệu thực hành, nhưng các cấu trúc thấp chiều thú vị thỉnh thoảng vẫn xuất hiện ngoài thực tế.</p>
+
+  <p>Hãy xét một tập điểm vẽ nên một liên kết hoặc một nút trong ba chiều. Một lần nữa, nhìn ở nhiều perplexity cho bức tranh đầy đủ nhất. Perplexity thấp cho hai vòng tách rời hoàn toàn; perplexity cao cho thấy một kiểu kết nối toàn cục.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-10" data-id="10"></div>
+  <div class="l-page-outset tsne-group" id="figures-11" data-id="11"></div>
+
+  <p>Nút trefoil là một ví dụ thú vị về cách nhiều lần chạy ảnh hưởng tới kết quả của t-SNE. Dưới đây là năm lần chạy của góc nhìn perplexity 2.</p>
+
+  <p>Thuật toán hai lần ổn định thành một vòng tròn, ít nhất vẫn bảo toàn tô-pô nội tại. Nhưng trong ba lần chạy còn lại, nó kết thúc với ba lời giải khác nhau, tạo ra các đứt gãy nhân tạo. Dùng màu điểm làm chỉ dẫn, bạn có thể thấy lần chạy thứ nhất và thứ ba rất xa nhau.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-12" data-id="12"></div>
+
+  <p>Tuy nhiên, năm lần chạy ở perplexity 50 cho kết quả, nếu bỏ qua đối xứng, gần như giống hệt nhau về mặt thị giác. Rõ ràng một số bài toán dễ tối ưu hơn những bài toán khác.</p>
+
+  <div class="l-page-outset tsne-group" id="figures-13" data-id="13"></div>
+
+  <hr>
+
+  <h2>Kết luận</h2>
+
+  <p>Có lý do khiến t-SNE trở nên phổ biến: nó cực kỳ linh hoạt và thường tìm được cấu trúc ở nơi các thuật toán giảm chiều khác không làm được. Đáng tiếc, chính sự linh hoạt đó khiến nó khó diễn giải. Bên ngoài tầm nhìn của người dùng, thuật toán thực hiện đủ loại điều chỉnh để làm gọn các trực quan hóa của nó. Dù vậy, đừng để "ma thuật" ẩn bên trong làm bạn tránh xa toàn bộ kỹ thuật này. Tin tốt là bằng cách nghiên cứu hành vi của t-SNE trong các trường hợp đơn giản, ta có thể phát triển trực giác về chuyện đang xảy ra.</p>
+
+  <dt-include src="assets/tsne-group.html"></dt-include>
+</dt-article>
+
+<dt-appendix>
+  <h3>Lời cảm ơn</h3>
+  <p>Chúng tôi biết ơn Chris Olah và Shan Carter vì đã tạo ra nền tảng này, và biết ơn Shan Carter vì những hỗ trợ xuất sắc về thiết kế và biên tập. Daniel Smilkov, James Wexler và Chi Zeng đã đưa ra nhiều nhận xét hữu ích. Chúng tôi cũng cảm ơn Andrej Karpathy vì đã tạo thư viện <a href="https://github.com/karpathy/tsnejs">tsnejs</a> dùng trong các biểu đồ tương tác.</p>
+  <p>Công việc này được thực hiện nhờ sự hỗ trợ của nhóm <a href="https://research.google.com/teams/brain/">Google Brain</a>.</p>
+  <p>Đã chỉnh sửa ngày 18 tháng 10 năm 2016 để mô tả và sửa các vấn đề khi perplexity được định nghĩa lớn hơn số điểm. Cảm ơn Laurens van der Maaten đã chỉ ra điều này.</p>
+</dt-appendix>
+
+<script type="text/bibliography">
+@article{maaten2008visualizing,
+  title={Visualizing data using t-SNE},
+  author={Maaten, Laurens van der and Hinton, Geoffrey},
+  journal={Journal of Machine Learning Research},
+  volume={9},
+  number={Nov},
+  pages={2579--2605},
+  year={2008},
+  url={http://www.jmlr.org/papers/volume9/vandermaaten08a/vandermaaten08a.pdf}
+}
+</script>
