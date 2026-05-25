@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<script src="https://distill.pub/template.v2.js"></script>
+<link href="material-icons.css" rel="stylesheet"/>
+</head><body><d-front-matter>
+<script type="text/json">{
+    "title": "Cách Dùng t-SNE Hiệu Quả",
+    "description": "Dù cực kỳ hữu ích để trực quan hóa dữ liệu nhiều chiều, biểu đồ t-SNE đôi khi có thể bí ẩn hoặc gây hiểu lầm.",
+    "authors": [
+      {
+        "author": "Martin Wattenberg",
+        "authorURL": "http://hint.fm/",
+        "affiliation": "Google Brain",
+        "affiliationURL": "http://g.co/brain"
+      },
+      {
+        "author": "Fernanda Viégas",
+        "authorURL": "http://hint.fm/",
+        "affiliation": "Google Brain",
+        "affiliationURL": "http://g.co/brain"
+      },
+      {
+        "author": "Ian Johnson",
+        "authorURL": "http://enjalot.github.io/",
+        "affiliation": "Google Cloud",
+        "affiliationURL": "http://cloud.google.com"
+      }
+    ]
+  }</script>
+</d-front-matter>
+<script src="assets/d3.min.js"></script>
+<script src="assets/tsne.js"></script>
+<script src="assets/demo-configs.js"></script>
+<script src="assets/figure-configs.js"></script>
+<script src="assets/visualize.js"></script>
+<script src="assets/figures.js"></script>
+<style>
+
+/* Resets */
+
+input[type=range] {
+  -webkit-appearance: none; /* Hides the slider so that custom slider can be made */
+  width: 100%; /* Specific width is required for Firefox. */
+  background: transparent; /* Otherwise white in Chrome */
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+}
+
+input[type=range]:focus {
+  outline: none; /* Removes the blue border. You should probably do some kind of focus styling for accessibility reasons though. */
+}
+
+input[type=range]::-ms-track {
+  width: 100%;
+  cursor: pointer;
+
+  /* Hides the slider so custom styles can be added */
+  background: transparent;
+  border-color: transparent;
+  color: transparent;
+}
+
+/* Thumb */
+
+/* Special styling for WebKit/Blink */
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: steelblue;
+  cursor: pointer;
+  margin-top: -6px; /* You need to specify a margin in Chrome, but in Firefox and IE it is automatic */
+}
+
+/* All the same stuff for Firefox */
+input[type=range]::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: steelblue;
+  cursor: pointer;
+  border: none;
+}
+
+/* All the same stuff for IE */
+input[type=range]::-ms-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  background: grey;
+  cursor: pointer;
+}
+
+/* Track */
+
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 3px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  border: none;
+}
+
+input[type=range]:focus::-webkit-slider-runnable-track {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+input[type=range]::-moz-range-track {
+  width: 100%;
+  height: 3px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  border: none;
+}
+
+input[type=range]::-ms-track {
+  width: 100%;
+  height: 3px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  border: none;
+}
+input[type=range]::-ms-fill-lower {
+  background: rgba(0, 0, 0, 0.1);
+}
+input[type=range]:focus::-ms-fill-lower {
+  background: rgba(0, 0, 0, 0.1);
+}
+input[type=range]::-ms-fill-upper {
+  background: rgba(0, 0, 0, 0.1);
+}
+input[type=range]:focus::-ms-fill-upper {
+  background: rgba(0, 0, 0, 0.1);
+}
+</style>
+<dt-include src="assets/tray.html"><style>
+  #tray-container {
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    top: -410px;
+    transition: top 0.3s;
+  }
+  #tray {
+    position: relative;
+    border: 2px solid steelblue;
+    background: white;
+    padding: 24px 24px 60px 24px;
+    box-shadow: 0px 2px 24px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    margin: 0 auto;
+    height: 380px;
+    display: flex;
+    justify-content: center;
+    max-width: 700px;
+    border-radius: 4px;
+  }
+
+  #tray-container.modal {
+    top: -4px;
+  }
+
+  #tray-content {
+    width: 55%;
+    height: 100%;
+    font-size: 12px;
+    position: relative;
+    top: -12px;
+  }
+  #tray-content canvas {
+    width: 100%;
+  }
+
+  #tray-options {
+    padding-left: 36px;
+    font-size: 13px;
+    line-height: 1.5em;
+    height: 100%;
+    width: 45%;
+  }
+  #tray-options #tray-controls {
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+  }
+  #tray-controls button {
+    cursor: pointer;
+    outline: none;
+    border-radius: 50%;
+    background: steelblue;
+    color: white;
+    width: 48px;
+    height: 48px;
+    border: none;
+    margin-right: 12px;
+  }
+  #tray-controls .play-pause i {
+    display: none;
+    font-size: 30px;
+  }
+  #tray-controls .play-pause.paused i:nth-child(1) {
+    display: block;
+  }
+  #tray-controls .play-pause.playing i:nth-child(2) {
+    display: block;
+  }
+  #tray-steps-display {
+    text-align: center;
+    width: 48px;
+    font-size: 15px;
+  }
+  #tray input {
+    margin-bottom: 12px;
+    margin-left: -2px;
+  }
+  #tray-data-sliders {
+  }
+  #tray-tsne-sliders {
+  }
+  #tray-close {
+    cursor: pointer;
+    outline: none;
+    background: white;
+    border: none;
+    text-align: center;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    padding: 6px 0;
+    background: #f0f4f5;
+    opacity: 0.6;
+    color: steelblue;
+    left: 0;
+  }
+  #tray-close:hover {
+    opacity: 1;
+  }
+</style>
+<div id="tray-container">
+<div id="tray">
+<div id="tray-content">
+<canvas height="400" width="400"></canvas>
+</div>
+<div id="tray-options">
+<div id="tray-controls">
+<button class="play-pause">
+<i class="material-icons">play_arrow</i>
+<i class="material-icons">pause</i>
+</button>
+<button class="restart">
+<i class="material-icons">refresh</i>
+</button>
+<div id="tray-steps-display">
+          Bước: <br/> <span class="step"></span>
+</div>
+</div>
+<div id="tray-data-sliders"></div>
+<div id="tray-tsne-sliders"></div>
+</div>
+<button id="tray-close"><i class="material-icons">expand_less</i></button>
+</div>
+</div>
+<script>
+// This depends on playground.js having setup the GLOBAL object
+  function runTrayState() {
+    // Set up t-SNE and start it running.
+    var state = GLOBALS.trayState;
+    var points = state.demo.generator.apply(null, state.demoParams);
+    var canvas = d3.select("#tray-content canvas").node()
+
+    // if there was already a playground demo going, lets destroy it and make a new one
+    if(GLOBALS.trayDemo) {
+      GLOBALS.trayDemo.destroy();
+      delete GLOBALS.trayDemo;
+    }
+    GLOBALS.trayDemo = demoMaker(points, canvas, state, function(step) {
+      d3.select("#tray-controls .step").text(step);
+      if(step >= state.stepLimit && !GLOBALS.trayUnpausedBefore) {
+        setTrayRunning(false)
+      }
+    })
+
+    GLOBALS.trayUnpausedBefore = false;
+    setTrayRunning(true);
+  }
+
+  function updateTraySliders() {
+    // we regenerate all the sliders from scratch
+    // we modify the global tray state when a slider is modified
+    var state = GLOBALS.trayState;
+    var dataSliders = d3.select('#tray-data-sliders');
+    dataSliders.html('');
+    state.demo.options.map(function(option, i) {
+      var value = state.demoParams[i];
+      var slider = makeTraySlider(dataSliders.node(), option.name,
+        option.min, option.max, value, function() {
+          // when this one updates we change the appropriate state
+          GLOBALS.trayState.demoParams[i] = +slider.value
+          runTrayState();
+        });
+    });
+
+    var tsneSliders = d3.select('#tray-tsne-sliders');
+    tsneSliders.html('');
+    var perpSlider = makeTraySlider(tsneSliders.node(), "Perplexity",
+        1, 100, state.perplexity, function() {
+          GLOBALS.trayState.perplexity = perpSlider.value
+          runTrayState();
+        });
+
+    var epsSlider = makeTraySlider(tsneSliders.node(), "Epsilon",
+        1, 20, state.epsilon, function() {
+          GLOBALS.trayState.epsilon = epsSlider.value
+          runTrayState();
+        });
+
+  }
+
+  function makeTraySlider(container, name, min, max, start, changeCallback) {
+    var dis = d3.select(container)
+    dis.append("span").classed("slider-label-" + name, true)
+      .text(name + ' ')
+    var value = dis.append("span").classed("slider-value-" + name, true)
+      .text(start)
+
+    var slider = dis.append("input")
+      .attr("type", "range")
+      .attr("min", min)
+      .attr("max", max)
+      .attr("value", start)
+      .on("change", changeCallback)
+      .on("input", function() {
+        value.text(slider.node().value);
+      })
+    return slider.node();
+  }
+
+  /* Activate the tray */
+  function updateStateFromFigure(figure, example, el) {
+    var y = el.getBoundingClientRect().top;
+    var demo = demosByName[figure.dataset];
+    var state = {
+      demo: demos[demo.index],
+      demoParams: figure.params.map(function(d) { return d}),
+      perplexity: example.perplexity,
+      epsilon: example.epsilon,
+      stepLimit: example.step
+    }
+    GLOBALS.trayState = state;
+    runTrayState()
+    updateTraySliders()
+    d3.select("#tray-container").classed("modal", true)
+    GLOBALS.trayOpen = true;
+  }
+
+  d3.select("body").on("keydown", function() {
+    if(d3.event.keyCode === 27) {
+      setTrayRunning(false)
+      d3.select("#tray-container").classed("modal", false);
+      d3.selectAll(".runner").classed("selected", false);
+    }
+  })
+  d3.select("#tray-close").on("click", function() {
+    setTrayRunning(false);
+    GLOBALS.trayOpen = false;
+    d3.select("#tray-container").classed("modal", false)
+    d3.selectAll(".runner").classed("selected", false);
+  })
+
+  /* Tray Controls */
+  var trayPlay = d3.select("#tray-controls .play-pause")
+  function setTrayRunning(r) {
+    GLOBALS.running = r;
+    if (GLOBALS.running) {
+      GLOBALS.trayDemo.unpause();
+      trayPlay
+        .classed("playing", true)
+        .classed("paused", false);
+    } else {
+      GLOBALS.trayDemo.pause();
+      trayPlay
+        .classed("playing", false)
+        .classed("paused", true);
+    }
+  }
+
+  // Hook up play / pause / restart buttons.
+  trayPlay.on("click", function() {
+    GLOBALS.trayUnpausedBefore = true;
+    setTrayRunning(!GLOBALS.running);
+  });
+
+  var trayRestart = d3.select("#tray-controls .restart")
+    .on("click", function() {
+      runTrayState();
+    })
+
+  d3.select(window).on("scroll.tray", function() {
+    if(GLOBALS.trayOpen) {
+      if(scrollY < 1000) {
+        setTrayRunning(false);
+        GLOBALS.trayOpen = false;
+        d3.select("#tray-container").classed("modal", false);
+        d3.selectAll(".runner").classed("selected", false);
+      }
+    }
+  });
+  /* Tray sliders */
+</script>
+</dt-include>
+<d-article>
+<d-title>
+<h1>Cách Dùng t-SNE Hiệu Quả</h1>
+<h2>Dù cực kỳ hữu ích để trực quan hóa dữ liệu nhiều chiều, biểu đồ t-SNE đôi khi có thể bí ẩn hoặc gây hiểu lầm. Bằng cách quan sát t-SNE trong các trường hợp đơn giản, ta có thể học cách dùng nó hiệu quả hơn.</h2>
+<dt-include src="assets/playground.html"><style>
+  #playground {
+    overflow: hidden;
+    font-family: 'Open Sans', sans-serif;
+    /*border-top: 1px solid rgba(0, 0, 0, 0.1);*/
+    /*border-bottom: 1px solid rgba(0, 0, 0, 0.1);*/
+    /*margin-top: 36px;*/
+    padding: 0;
+    /*background: #fcfcfc;*/
+    z-index: 1000;
+  }
+
+  #playground * {
+    box-sizing: border-box;
+  }
+
+  #playground.modal {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: 50px;
+  }
+
+  /* Playground Canvas */
+  #playground-canvas {
+    float: left;
+    width: 55%;
+  }
+
+  #playground-canvas canvas {
+    width: 100%;
+  }
+
+  /* Data Menu */
+  #data-menu {
+    /*float: left;*/
+    /*width: 25%*/
+    width: 40%;
+    float: left;
+    margin-bottom: 24px;
+    overflow: hidden;
+    margin-left: 5%;
+  }
+  #data-menu .demo-data {
+    cursor: pointer;
+    position: relative;
+    font-size: 10px;
+    line-height: 1.2em;
+    box-sizing: border-box;
+    float: left;
+    margin: 2px;
+    padding: 4px;
+    width: calc(33% - 4px);
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.08);
+  }
+  @media(min-width: 480px) {
+    #data-menu .demo-data {
+      width: calc(25% - 8px);
+      padding: 8px;
+      margin: 4px;
+    }
+  }
+  @media(min-width: 768px) {
+    #data-menu .demo-data {
+      width: calc(16.5% - 8px);
+      padding: 8px;
+      margin: 4px;
+    }
+  }
+  #data-menu .demo-data:hover {
+  border: 1px solid rgba(0, 0, 0, 0.2);
+
+  }
+  #data-menu .demo-data.selected::after {
+    content: "";
+    border: 2px solid rgba(70, 130, 180, 0.8);
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
+    border-radius: 4px;
+  }
+  #data-menu .demo-data span {
+    display: none;
+  }
+  #data-menu .demo-data:hover canvas {
+    opacity: 1;
+  }
+  #data-menu .demo-data canvas {
+    width: 100%;
+    opacity: 0.3;
+  }
+  #data-menu .demo-data.selected canvas {
+    opacity: 1;
+  }
+
+  /* Data Details */
+  #data-details {
+    position: relative;
+  }
+
+  @media(min-width: 768px) {
+    #data-details {
+      width: 40%;
+      float: right;
+    }
+  }
+
+  #data-details #data-controls {
+    width: 40%;
+    float: right;
+    position: relative;
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  @media(min-width: 768px) {
+    #data-details #data-controls {
+      width: 50%;
+      margin-right: 10%;
+      float: left;
+    }
+  }
+
+  #data-details #play-controls {
+    margin-bottom: 18px;
+    overflow: hidden;
+    position: relative;
+  }
+  #data-details #play-controls button {
+    cursor: pointer;
+    outline: none;
+    border-radius: 50%;
+    background: steelblue;
+    color: white;
+    width: 25%;
+    margin-right: 5%;
+    padding-top: 25%;
+    padding-bottom: 0;
+    border: none;
+    float: left;
+    position: relative;
+  }
+  #play-controls i {
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 36px;
+    font-size: 24px;
+    line-height: 0;
+  }
+  @media(min-width: 768px) {
+    #play-controls i {
+      font-size: 30px;
+    }
+  }
+  #play-controls #play-pause i {
+    display: none;
+    position: absolute;
+  }
+  #play-controls #play-pause.paused i:nth-child(1) {
+    display: block;
+  }
+  #play-controls #play-pause.playing i:nth-child(2) {
+    display: block;
+  }
+
+  #steps-display {
+    float: left;
+    text-align: center;
+    width: 25%;
+    line-height: 1.5em;
+    font-size: 13px;
+  }
+
+  @media(min-width: 1024px) {
+    #steps-display {
+      font-size: 16px;
+      line-height: 1.6em;
+    }
+  }
+  #data-details #data-description {
+    width: 50%;
+    margin-right: 10%;
+    float: right;
+    font-size: 14px;
+    line-height: 1.6em;
+  }
+
+  @media(min-width: 768px) {
+    #data-details #data-description {
+      width: 40%;
+      float: left;
+      margin-right: 0;
+    }
+  }
+
+  /* Options */
+  #data-details #options {
+    float: left;
+    padding-left: 36px;
+    font-size: 13px;
+    line-height: 1.5em;
+    width: 45%;
+  }
+  #data-details input {
+    display: block;
+    width: 100%;
+    margin: 8px 0 16px 0;
+  }
+
+  #options #data-options {
+    width: 45%;
+    margin-left: 4px;
+  }
+  #options #tsne-options {
+    width: 45%;
+    margin-left: 4px;
+  }
+
+  #data-details #share {
+    margin-top: 8px;
+    display: block;
+    color: rgba(0, 0, 0, 0.4);
+    text-decoration: none;
+    font-size: 12px;
+  }
+
+  #data-details #share:hover {
+    text-decoration: underline;
+  }
+
+  #data-details #share i {
+    line-height: 0px;
+    position: relative;
+    top: 7px;
+  }
+
+</style>
+<div id="playground">
+<div id="playground-canvas">
+<canvas height="600" id="output" width="600"></canvas>
+</div>
+<div id="data-menu"></div>
+<div id="data-details">
+<div id="data-controls">
+<div id="play-controls">
+<button id="play-pause"><i class="material-icons">play_arrow</i><i class="material-icons">pause</i></button>
+<button id="restart"><i class="material-icons">refresh</i></button>
+<div id="steps-display">Bước<br/><span id="step"></span>
+</div>
+</div>
+<div id="data-options"></div>
+<div id="tsne-options"></div>
+</div>
+<div id="data-description">
+<span></span>
+<a id="share" style="display:none;"><i class="material-icons">link</i> Share this view</a>
+</div>
+</div>
+</div>
+<script src="assets/playground.js"></script>
+</dt-include>
+</d-title>
+<d-byline></d-byline><script id="localize-template-labels">
+  function localizeTemplateLabels() {
+    const labels = new Map([
+      ["Authors", "Tác giả"],
+      ["Affiliations", "Đơn vị"],
+      ["Published", "Xuất bản"],
+      ["AUTHORS", "TÁC GIẢ"],
+      ["AFFILIATIONS", "ĐƠN VỊ"],
+      ["PUBLISHED", "XUẤT BẢN"],
+      ["Not published yet.", "Chưa xuất bản."],
+      ["No DOI yet.", "Chưa có DOI."]
+    ]);
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    textNodes.forEach(node => {
+      let next = node.nodeValue;
+      labels.forEach((replacement, source) => {
+        next = next.split(source).join(replacement);
+      });
+      if (next !== node.nodeValue) node.nodeValue = next;
+    });
+  }
+  let localizeTemplateLabelsTimer;
+  function scheduleTemplateLabelLocalization() {
+    clearTimeout(localizeTemplateLabelsTimer);
+    localizeTemplateLabelsTimer = setTimeout(localizeTemplateLabels, 100);
+  }
+  window.addEventListener("load", () => {
+    localizeTemplateLabels();
+    setTimeout(localizeTemplateLabels, 1000);
+    setTimeout(localizeTemplateLabels, 3000);
+  });
+  new MutationObserver(scheduleTemplateLabelLocalization).observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
+</script>
+<p>Một phương pháp phổ biến để khám phá dữ liệu nhiều chiều là t-SNE, được van der Maaten và Hinton giới thiệu năm 2008. Kỹ thuật này đã trở nên rất phổ biến trong học máy vì nó có khả năng gần như kỳ diệu: tạo ra các "bản đồ" hai chiều hấp dẫn từ dữ liệu có hàng trăm, thậm chí hàng nghìn chiều. Dù ấn tượng, những hình ảnh này rất dễ bị diễn giải sai. Mục đích của ghi chú này là giúp tránh một số cách hiểu sai thường gặp.</p>
+<p>Chúng ta sẽ đi qua một loạt ví dụ đơn giản để minh họa biểu đồ t-SNE có thể và không thể cho thấy điều gì. Kỹ thuật t-SNE thật sự hữu ích, nhưng chỉ khi bạn biết cách diễn giải nó.</p>
+<p>Trước khi đi sâu hơn: nếu bạn chưa từng gặp t-SNE, đây là phần toán học cần biết. Mục tiêu là lấy một tập điểm trong không gian nhiều chiều và tìm một biểu diễn trung thực của các điểm đó trong không gian ít chiều hơn, thường là mặt phẳng 2D. Thuật toán là phi tuyến và thích nghi với dữ liệu nền, thực hiện các phép biến đổi khác nhau ở các vùng khác nhau. Chính các khác biệt này có thể là nguồn gây nhầm lẫn lớn.</p>
+<p>Một đặc điểm thứ hai của t-SNE là tham số có thể điều chỉnh, "perplexity", nói một cách lỏng lẻo là cách cân bằng sự chú ý giữa khía cạnh cục bộ và toàn cục của dữ liệu. Theo một nghĩa nào đó, tham số này là phỏng đoán về số láng giềng gần của mỗi điểm. Giá trị perplexity có tác động phức tạp lên hình ảnh kết quả. Bài báo gốc viết:  Nhưng câu chuyện tinh tế hơn thế. Khai thác tốt t-SNE có thể đồng nghĩa với việc phân tích nhiều biểu đồ với các perplexity khác nhau.</p>
+<p>Đó chưa phải toàn bộ các phức tạp. Chẳng hạn, thuật toán t-SNE không phải lúc nào cũng cho đầu ra tương tự nhau ở các lần chạy liên tiếp, và còn có các siêu tham số khác liên quan tới quá trình tối ưu hóa.</p>
+<hr/>
+<h2>1. Các siêu tham số thật sự quan trọng</h2>
+<p>Hãy bắt đầu với "hello world" của t-SNE: một tập dữ liệu gồm hai cụm cách xa nhau. Để đơn giản nhất có thể, ta xét các cụm trong mặt phẳng 2D, như hình bên trái. Để dễ nhìn, hai cụm được mã màu. Các biểu đồ bên phải cho thấy kết quả t-SNE với năm giá trị perplexity khác nhau.</p>
+<div class="l-page-outset tsne-group" data-id="01" id="figures-01">
+</div>
+<p>Với perplexity trong khoảng 5-50 do van der Maaten và Hinton gợi ý, các biểu đồ đúng là cho thấy hai cụm này, dù hình dạng rất khác nhau. Ngoài khoảng đó, mọi thứ bắt đầu kỳ lạ. Với perplexity 2, biến thiên cục bộ chi phối. Ở perplexity 100, hai cụm bị nhập lại, minh họa một cạm bẫy: để thuật toán vận hành đúng, perplexity nên nhỏ hơn số điểm. Nếu không, các triển khai có thể cho hành vi bất ngờ.</p>
+<p>Mỗi biểu đồ ở trên được tạo bằng 5.000 vòng lặp với learning rate, thường gọi là "epsilon", bằng 10, và đã đạt trạng thái ổn định ở bước 5.000. Các giá trị đó tạo khác biệt đến mức nào? Theo kinh nghiệm của chúng tôi, điều quan trọng nhất là lặp cho tới khi đạt một cấu hình ổn định.</p>
+<div class="l-page-outset tsne-group" data-id="02" id="figures-02">
+</div>
+<p>Các hình trên cho thấy năm lần chạy khác nhau ở perplexity 30. Bốn lần đầu bị dừng trước khi ổn định. Sau 10, 20, 60 và 120 bước, bạn có thể thấy các bố cục trông như một chiều hoặc thậm chí giống một điểm của các cụm. Nếu bạn thấy biểu đồ t-SNE có hình dạng "bị thắt" kỳ lạ, rất có thể quá trình đã dừng quá sớm. Đáng tiếc là không có số bước cố định nào bảo đảm kết quả ổn định. Các tập dữ liệu khác nhau có thể cần số vòng lặp khác nhau để hội tụ.</p>
+<p>Một câu hỏi tự nhiên khác là liệu các lần chạy khác nhau với cùng siêu tham số có cho cùng kết quả không. Trong ví dụ hai cụm đơn giản này, và trong hầu hết ví dụ khác mà chúng tôi bàn tới, nhiều lần chạy cho cùng hình dạng toàn cục. Tuy nhiên, một số tập dữ liệu cho các biểu đồ khác nhau rõ rệt qua từng lần chạy; chúng tôi sẽ đưa ra một ví dụ như vậy ở phần sau.</p>
+<p>Từ đây trở đi, trừ khi nói khác, chúng tôi sẽ hiển thị kết quả từ 5.000 vòng lặp. Con số đó thường đủ để hội tụ trong các ví dụ tương đối nhỏ của bài này. Tuy vậy, chúng tôi vẫn sẽ hiển thị nhiều giá trị perplexity, vì tham số này dường như tạo khác biệt lớn trong mọi trường hợp.</p>
+<hr/>
+<h2>2. Kích thước cụm trong biểu đồ t-SNE không có ý nghĩa</h2>
+<p>Đến đây mọi thứ có vẻ ổn. Nhưng nếu hai cụm có độ lệch chuẩn khác nhau, tức kích thước khác nhau thì sao? Ở đây kích thước nghĩa là kích thước hộp bao, không phải số điểm. Dưới đây là các biểu đồ t-SNE cho một hỗn hợp Gaussian trong mặt phẳng, trong đó một cụm phân tán gấp 10 lần cụm kia.</p>
+<div class="l-page-outset tsne-group" data-id="03" id="figures-03">
+</div>
+<p>Đáng ngạc nhiên là hai cụm trông gần như cùng kích thước trong các biểu đồ t-SNE. Chuyện gì đang xảy ra? Thuật toán t-SNE thích nghi khái niệm "khoảng cách" của nó với biến thiên mật độ theo vùng trong tập dữ liệu. Kết quả là nó tự nhiên giãn các cụm dày đặc và co các cụm thưa, làm cân bằng kích thước cụm. Cần nói rõ rằng đây là hiệu ứng khác với thực tế thông thường rằng mọi kỹ thuật giảm chiều đều bóp méo khoảng cách. Trong ví dụ này, toàn bộ dữ liệu ban đầu đã là hai chiều. Thay vào đó, cân bằng mật độ là điều xảy ra có chủ đích và là một đặc tính dự đoán được của t-SNE.</p>
+<p>Điểm mấu chốt là bạn không thể nhìn thấy kích thước tương đối của các cụm trong biểu đồ t-SNE.</p>
+<hr/>
+<h2>3. Khoảng cách giữa các cụm có thể không mang ý nghĩa</h2>
+<p>Còn khoảng cách  các cụm thì sao? Các biểu đồ tiếp theo cho thấy ba Gaussian, mỗi cụm 50 điểm, trong đó một cặp cách nhau xa gấp 5 lần một cặp khác.</p>
+<div class="l-page-outset tsne-group" data-id="04" id="figures-04">
+</div>
+<p>Ở perplexity 50, biểu đồ cho cảm giác khá tốt về hình học toàn cục. Với các perplexity thấp hơn, các cụm trông gần như cách đều. Khi perplexity là 100, ta thấy hình học toàn cục khá ổn, nhưng một cụm lại có vẻ nhỏ hơn hẳn các cụm khác một cách sai lệch. Vì perplexity 50 cho hình ảnh tốt trong ví dụ này, liệu ta có thể luôn đặt perplexity bằng 50 khi muốn thấy hình học toàn cục không?</p>
+<p>Đáng buồn là không. Nếu thêm nhiều điểm vào mỗi cụm, perplexity phải tăng để bù lại. Đây là các biểu đồ t-SNE cho ba cụm Gaussian, mỗi cụm 200 điểm thay vì 50. Lúc này không giá trị perplexity thử nghiệm nào cho kết quả tốt.</p>
+<div class="l-page-outset tsne-group" data-id="05" id="figures-05">
+</div>
+<p>Việc muốn thấy hình học toàn cục lại cần tinh chỉnh perplexity là một tin không vui. Dữ liệu thực tế có thể có nhiều cụm với số phần tử khác nhau. Có thể không tồn tại một giá trị perplexity duy nhất nắm bắt được khoảng cách giữa tất cả các cụm, và đáng tiếc perplexity lại là tham số toàn cục. Khắc phục vấn đề này có thể là một hướng nghiên cứu thú vị trong tương lai.</p>
+<p>Thông điệp cơ bản là khoảng cách giữa các cụm tách biệt rõ trong biểu đồ t-SNE có thể chẳng mang ý nghĩa gì.</p>
+<hr/>
+<h2>4. Nhiễu ngẫu nhiên không phải lúc nào cũng trông ngẫu nhiên</h2>
+<p>Một cạm bẫy kinh điển là tưởng rằng mình thấy mẫu hình trong thứ thật ra chỉ là dữ liệu ngẫu nhiên. Nhận ra nhiễu khi nhìn thấy nó là một kỹ năng quan trọng, nhưng cần thời gian để xây dựng trực giác đúng. Điều khó ở t-SNE là nó ném nhiều trực giác sẵn có ra ngoài cửa sổ. Các biểu đồ tiếp theo cho thấy dữ liệu thật sự ngẫu nhiên: 500 điểm được lấy từ phân phối Gaussian đơn vị trong 100 chiều. Hình bên trái là phép chiếu lên hai tọa độ đầu tiên.</p>
+<div class="l-page-outset tsne-group" data-id="06" id="figures-06">
+</div>
+<p>Biểu đồ với perplexity 2 dường như cho thấy các cụm rất rõ. Nếu bạn đang điều chỉnh perplexity để làm lộ cấu trúc trong dữ liệu, bạn có thể nghĩ mình đã trúng lớn.</p>
+<p>Tất nhiên, vì ta biết đám mây điểm được sinh ngẫu nhiên, nó không có cụm nào đáng quan tâm về mặt thống kê: các "đám" đó không có ý nghĩa. Nếu nhìn lại các ví dụ trước, perplexity thấp thường dẫn tới kiểu phân bố này. Nhận ra những đám đó là nhiễu ngẫu nhiên là một phần quan trọng khi đọc biểu đồ t-SNE.</p>
+<p>Tuy vậy còn một điều thú vị khác, có thể là điểm thắng của t-SNE. Lúc đầu, biểu đồ perplexity 30 trông chẳng giống phân phối Gaussian: chỉ có khác biệt mật độ nhẹ giữa các vùng của đám mây, và các điểm có vẻ được phân bố đều một cách đáng ngờ. Thực ra, các đặc điểm này nói lên điều hữu ích về phân phối chuẩn nhiều chiều, vốn rất gần với phân phối đều trên một mặt cầu: các điểm phân bố đều với khoảng cách giữa các điểm gần như bằng nhau. Nhìn theo cách này, biểu đồ t-SNE chính xác hơn bất kỳ phép chiếu tuyến tính nào.</p>
+<hr/>
+<h2>5. Bạn có thể thấy một số hình dạng, trong một số trường hợp</h2>
+<p>Dữ liệu hiếm khi phân bố hoàn toàn đối xứng. Hãy xem một phân phối Gaussian thẳng theo trục trong 50 chiều, trong đó độ lệch chuẩn ở tọa độ i là 1/i. Nói cách khác, ta đang nhìn một đám mây điểm dạng ellipsoid hơi dài.</p>
+<div class="l-page-outset tsne-group" data-id="07" id="figures-07">
+</div>
+<p>Với perplexity đủ cao, các hình dạng kéo dài rất dễ đọc. Ngược lại, ở perplexity thấp, hiệu ứng cục bộ và các "đám" vô nghĩa chiếm trung tâm. Những hình dạng cực đoan hơn cũng hiện ra, nhưng một lần nữa chỉ ở perplexity phù hợp. Ví dụ, đây là hai cụm, mỗi cụm 75 điểm trong 2D, được sắp thành các đường song song với một ít nhiễu.</p>
+<div class="l-page-outset tsne-group" data-id="08" id="figures-08">
+</div>
+<p>Trong một khoảng perplexity nhất định, các cụm dài trông khá gần với hình dạng đúng, điều này khá yên tâm.</p>
+<p>Ngay cả trong các trường hợp tốt nhất vẫn có một méo mó tinh tế: các đường hơi cong ra ngoài trong biểu đồ t-SNE. Lý do là như thường lệ, t-SNE có xu hướng giãn các vùng dữ liệu dày hơn. Vì phần giữa của các cụm có ít khoảng trống xung quanh hơn hai đầu, thuật toán phóng đại chúng.</p>
+<hr/>
+<h2>6. Với tô-pô, bạn có thể cần nhiều hơn một biểu đồ</h2>
+<p>Đôi khi bạn có thể đọc thông tin tô-pô từ biểu đồ t-SNE, nhưng thường cần quan sát ở nhiều perplexity. Một tính chất tô-pô đơn giản nhất là sự bao chứa. Các biểu đồ dưới đây cho thấy hai nhóm, mỗi nhóm 75 điểm trong không gian 50 chiều. Cả hai được lấy mẫu từ các phân phối Gaussian đối xứng tâm tại gốc, nhưng một nhóm phân tán chặt hơn nhóm kia 50 lần. Phân phối "nhỏ" về cơ bản nằm bên trong phân phối lớn.</p>
+<div class="l-page-outset tsne-group" data-id="09" id="figures-09">
+</div>
+<p>Góc nhìn perplexity 30 cho thấy tô-pô cơ bản một cách đúng đắn, nhưng t-SNE lại phóng đại mạnh kích thước của nhóm điểm nhỏ hơn. Ở perplexity 50, một hiện tượng mới xuất hiện: nhóm ngoài trở thành một vòng tròn, vì biểu đồ cố mô tả việc tất cả điểm của nhóm ngoài đều cách nhóm trong xấp xỉ như nhau. Nếu chỉ nhìn hình này, rất dễ hiểu nhầm các điểm ngoài là một cấu trúc một chiều.</p>
+<p>Còn các dạng tô-pô phức tạp hơn thì sao? Chủ đề này có thể gần gũi với các nhà toán học hơn là các nhà phân tích dữ liệu thực hành, nhưng các cấu trúc thấp chiều thú vị thỉnh thoảng vẫn xuất hiện ngoài thực tế.</p>
+<p>Hãy xét một tập điểm vẽ nên một liên kết hoặc một nút trong ba chiều. Một lần nữa, nhìn ở nhiều perplexity cho bức tranh đầy đủ nhất. Perplexity thấp cho hai vòng tách rời hoàn toàn; perplexity cao cho thấy một kiểu kết nối toàn cục.</p>
+<div class="l-page-outset tsne-group" data-id="10" id="figures-10">
+</div>
+<div class="l-page-outset tsne-group" data-id="11" id="figures-11">
+</div>
+<p>Nút trefoil là một ví dụ thú vị về cách nhiều lần chạy ảnh hưởng tới kết quả của t-SNE. Dưới đây là năm lần chạy của góc nhìn perplexity 2.</p>
+<p>Thuật toán hai lần ổn định thành một vòng tròn, ít nhất vẫn bảo toàn tô-pô nội tại. Nhưng trong ba lần chạy còn lại, nó kết thúc với ba lời giải khác nhau, tạo ra các đứt gãy nhân tạo. Dùng màu điểm làm chỉ dẫn, bạn có thể thấy lần chạy thứ nhất và thứ ba rất xa nhau.</p>
+<div class="l-page-outset tsne-group" data-id="12" id="figures-12">
+</div>
+<p>Tuy nhiên, năm lần chạy ở perplexity 50 cho kết quả, nếu bỏ qua đối xứng, gần như giống hệt nhau về mặt thị giác. Rõ ràng một số bài toán dễ tối ưu hơn những bài toán khác.</p>
+<div class="l-page-outset tsne-group" data-id="13" id="figures-13">
+</div>
+<hr/>
+<h2>Kết luận</h2>
+<p>Có lý do khiến t-SNE trở nên phổ biến: nó cực kỳ linh hoạt và thường tìm được cấu trúc ở nơi các thuật toán giảm chiều khác không làm được. Đáng tiếc, chính sự linh hoạt đó khiến nó khó diễn giải. Bên ngoài tầm nhìn của người dùng, thuật toán thực hiện đủ loại điều chỉnh để làm gọn các trực quan hóa của nó. Dù vậy, đừng để "ma thuật" ẩn bên trong làm bạn tránh xa toàn bộ kỹ thuật này. Tin tốt là bằng cách nghiên cứu hành vi của t-SNE trong các trường hợp đơn giản, ta có thể phát triển trực giác về chuyện đang xảy ra.</p>
+<!-- bring the figures to life -->
+<dt-include src="assets/tsne-group.html"><style>
+
+.tsne-group {
+  overflow: visible;
+  display: -webkit-flex;
+  display: flex;
+  flex-direction: column;
+  margin-top: 36px;
+  margin-bottom: 36px;
+}
+
+@media(min-width: 640px) {
+  .tsne-group {
+    -webkit-flex-direction: row;
+    flex-direction: row;
+  }
+}
+
+.tsne-group .original,
+.tsne-group .runner {
+  box-sizing: border-box;
+  -webkit-flex-grow: 1;
+  flex-grow: 1;
+  position: relative;
+  display: -webkit-flex;
+  display: flex;
+  margin-bottom: 12px;
+}
+
+.tsne-group .original {
+  position: relative;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  padding-bottom: 12px;
+}
+
+@media(min-width: 640px) {
+  .tsne-group .original,
+  .tsne-group .runner {
+    display: block;
+    width: 100%;
+    margin-bottom: 0;
+  }
+
+  .tsne-group .original {
+    margin-left: 0;
+    padding-right: 12px;
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .tsne-group .runner {
+    margin-left: 12px;
+  }
+}
+
+.tsne-group .runner.no-click {
+  cursor: default;
+}
+
+.runner.clickable {
+  cursor: pointer;
+}
+
+.runner.clickable:hover .image {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.runner:hover i {
+  opacity: 1;
+}
+
+.runner.selected i {
+  opacity: 1;
+}
+
+.runner i {
+  font-size: 30px;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  background-color: hsla(207, 44%, 79%, 0.8);
+  color: steelblue;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  line-height: 0;
+  width: 150px;
+  padding: 75px 0;
+  text-align: center;
+}
+
+@media(min-width: 640px) {
+  .runner i {
+    width: 100%;
+    padding: 50% 0;
+  }
+}
+
+.runner.selected .image::after {
+  content: "";
+  border: 2px solid rgba(70, 130, 180, 1);
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  box-sizing: border-box;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+.tsne-group .image {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.08);
+  width: 150px;
+  padding-top: 150px;
+  background: white;
+  position: relative;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  margin-right: 12px;
+}
+
+@media(min-width: 640px) {
+  .tsne-group .image {
+    width: 100%;
+    padding-top: 100%;
+    margin-right: 0;
+  }
+}
+
+.tsne-group .original .image {
+  box-shadow: none;
+}
+
+.tsne-group .image img {
+  position: absolute;
+  top: 5%;
+  left: 5%;
+  width: 90%;
+}
+
+.tsne-group h3.caption {
+  font-size: 15px;
+  margin-top: 12px;
+}
+
+.tsne-group .caption {
+  font-size: 12px;
+  line-height: 1.6em;
+  margin-top: 12px;
+  width: 100px;
+}
+
+@media(min-width: 640px) {
+  .tsne-group .caption,
+  .tsne-group h3.caption {
+    margin-top: 8px;
+    width: 100%;
+  }
+}
+</style>
+<script>
+(function() {
+  var format = d3.format(",");
+  d3.selectAll(".tsne-group").data(figures, function(d) {
+    if(!d) return this.dataset.id;
+    return d.id
+  })
+  .each(generateFigure)
+
+  function generateFigure(figure) {
+
+    var FIGURE = figure.id
+    var dis = d3.select(this)
+    var original = dis.append("div").classed("original", true)
+    original.append("div")
+        .classed("image", true)
+      .append("img")
+        .classed("tsne-plot", true)
+        .attr("src", "assets/figure_" + FIGURE + "_" + "original.png");
+    original.append("h3").classed("caption", true).text("Original")
+
+    // examples
+    var runners = dis.selectAll(".runner").data(figure.examples)
+      .enter().append("div").classed("runner", true)
+    if(!figure.noclick) {
+      runners
+        .classed("clickable", true)
+        .on("click", function(d) {
+          d3.selectAll(".runner").classed("selected", false)
+          updateStateFromFigure(figure, d, this);
+          d3.select(this).classed("selected", true)
+        });
+    } else {
+      runners.classed("no-click", true)
+    }
+
+    runners.append("div")
+        .classed("image", true)
+      .append("img")
+        .attr("src", function(d,i) {
+          return "assets/figure_" + FIGURE + "_" + d.id + ".png"
+        });
+
+    if(!figure.noclick) {
+      runners.append("i")
+        .classed("material-icons", true)
+        .text("open_in_browser")
+    }
+
+    var caption = runners.append("div").classed("caption", true);
+
+    caption.append("div").text(function(d) { return "Perplexity: " + format(d.perplexity); })
+
+    caption.append("div").text(function(d) { return "Bước: " + format(d.step); })
+  }
+})()
+</script>
+</dt-include>
+</d-article>
+<d-appendix>
+<h3>Acknowledgments</h3>
+<p>We are grateful to Chris Olah and Shan Carter for creating this platform, and for excellent design and editorial
+     help from Shan Carter.
+     Daniel Smilkov, James Wexler, and Chi Zeng provided many helpful comments.
+     We also thank Andrej Karpathy for creating the
+     <a href="https://github.com/karpathy/tsnejs">tsnejs</a> library used in the interactive diagrams.</p>
+<p>This work was made possible by the support of the <a href="https://research.google.com/teams/brain/">Google Brain</a> team.</p>
+<p>Biên tập ngày 18 tháng 10 năm 2016 để mô tả và sửa các vấn đề khi perplexity được định nghĩa lớn hơn số điểm. Cảm ơn Laurens van der Maaten đã chỉ ra vấn đề này.</p>
+<d-footnote-list></d-footnote-list>
+<d-bibliography>
+<script type="text/bibtex">
+    @article{maaten2008visualizing,
+      title={Visualizing data using t-SNE},
+      author={Maaten, Laurens van der and Hinton, Geoffrey},
+      journal={Journal of Machine Learning Research},
+      volume={9},
+      number={Nov},
+      pages={2579--2605},
+      year={2008},
+      url={http://www.jmlr.org/papers/volume9/vandermaaten08a/vandermaaten08a.pdf}
+    }
+    </script>
+</d-bibliography>
+</d-appendix>
+</body></html>
